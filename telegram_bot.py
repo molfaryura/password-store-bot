@@ -82,9 +82,13 @@ if you forget your secret word, you won't be able to see your passwords! """)
 async def hint(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['hint'] = message.text
-    database.connect_to_db_and_create_table(table_name=message.from_user.username)
-    await database.add_to_db(state, message.from_user.username)
-    database.close_db_connection()
+    try:
+        database.connect_to_db_and_create_table(table_name=message.from_user.username)
+        await database.add_to_db(state, message.from_user.username)
+    except Exception:
+        await message.answer("Something bad was happened with the database. Please try again.")
+    finally:
+        database.close_db_connection()
     await  message.answer(f"Your password is successfully stored in the database")
     await state.finish()  
 
