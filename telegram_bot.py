@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor
@@ -6,7 +8,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher.filters import Text
 
-import asyncio
+import database
 
 import os
 
@@ -36,13 +38,12 @@ async def start(message:types.Message):
     await bot.send_message(message.chat.id, info, parse_mode='html')
 
 @dp.message_handler(commands=['cancel'], state="*")
-@dp.message_handler(Text(equals="cancel", ignore_case=True), state="*")
-async def cancel_handler(message: types.Message, state: FSMContext):
+async def cancel(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
     if current_state is None:
         return
     await state.finish()
-    await message.answer("Done!")
+    await message.answer("Canceled!")
 
 
 @dp.message_handler(commands=['add'], state=None)
@@ -63,10 +64,10 @@ async def pwd(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['password'] = message.text
     await Form.next()
-    #task = asyncio.create_task(asyncio.sleep(5))
+    task = asyncio.create_task(asyncio.sleep(5))
     await  message.answer("Type your secret word: ")
-    #await task
-    #await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+    await task
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
 
 
 @dp.message_handler(state=Form.secret_word)
@@ -81,7 +82,10 @@ if you forget your secret word, you won't be able to see your passwords! """)
 async def hint(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['hint'] = message.text
-    await  message.answer("Your password is successfully stored in the database")
+    database.connect_to_db_and_create_table(table_name=message.from_user.username)
+    await database.add_to_db(state, message.from_user.username)
+    database.close_db_connection()
+    await  message.answer(f"Your password is successfully stored in the database")
     await state.finish()  
 
 
