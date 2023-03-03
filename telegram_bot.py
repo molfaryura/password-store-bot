@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
@@ -20,6 +21,8 @@ storage = MemoryStorage()
 
 bot = Bot(os.environ.get('TOKEN'))
 dp = Dispatcher(bot, storage=storage)
+
+thread_executor = ThreadPoolExecutor()
 
 class Form(StatesGroup):
     account = State()
@@ -64,7 +67,7 @@ async def pwd(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['password'] = message.text
     await Form.next()
-    task = asyncio.create_task(asyncio.sleep(5))
+    task = asyncio.create_task(asyncio.sleep(350))
     await  message.answer("Type your secret word: ")
     await task
     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
@@ -83,15 +86,25 @@ async def hint(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['hint'] = message.text
     try:
-        database.connect_to_db_and_create_table(table_name=message.from_user.username)
+        await database.connect_to_db()
+        await database.create_table(table_name=message.from_user.username)
         await database.add_to_db(state, message.from_user.username)
-    except Exception:
-        await message.answer("Something bad was happened with the database. Please try again.")
+    except Exception as error:
+        await message.answer(f"{error}")
     finally:
-        database.close_db_connection()
+        await database.close_db_connection()
     await  message.answer(f"Your password is successfully stored in the database")
     await state.finish()  
 
+@dp.message_handler(commands=['show'])
+async def show_passwords(message:types.Message):
+    await database.connect_to_db()
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(thread_executor, database.select_from_db, message.from_user.username)
+    task = asyncio.create_task(asyncio.sleep(5))
+    bot_message = await bot.send_message(message.chat.id, result)
+    await task
+    await bot.delete_message(chat_id=message.chat.id, message_id=bot_message.message_id)
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
