@@ -56,7 +56,12 @@ async def add_to_db(state, table_name):
 
 async def check_connection():
     if conn is None or cur is None:
-       connect_to_db()
+       await connect_to_db()
+
+def check_secret_word(table_name):
+        cur.execute(sql.SQL('''SELECT secret_word FROM {} WHERE id=1''').format(sql.Identifier(table_name)))
+        rows = cur.fetchall()
+        return rows[0][0]
 
 
 def select_from_db(table_name):
@@ -64,3 +69,4 @@ def select_from_db(table_name):
     rows = cur.fetchall()
     result = {row[0]:row[1] for row in rows}
     return '\n'.join(f'{acc}: {pwd}' for acc, pwd in result.items())
+

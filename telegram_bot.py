@@ -30,6 +30,9 @@ class Form(StatesGroup):
     secret_word = State()
     hint = State()
 
+class SecondForm(StatesGroup):
+    check_secret = State()
+
 @dp.message_handler(commands=['start'])
 async def start(message:types.Message):
     info = (f'Hello <b>{message.from_user.first_name}</b>,\n'
@@ -96,15 +99,31 @@ async def hint(message:types.Message, state: FSMContext):
     await  message.answer(f"Your password is successfully stored in the database")
     await state.finish()  
 
-@dp.message_handler(commands=['show'])
-async def show_passwords(message:types.Message):
-    await database.connect_to_db()
+
+@dp.message_handler(commands=['show'], state=None)
+async def check_secret(message:types.Message, state: FSMContext):
+    await SecondForm.check_secret.set()
+    await bot.send_message(message.chat.id, 'Type your secret word.')
+
+
+@dp.message_handler(state=SecondForm.check_secret)
+async def show_passwords(message:types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['check_secret'] = message.text
+    await database.check_connection()
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(thread_executor, database.select_from_db, message.from_user.username)
-    task = asyncio.create_task(asyncio.sleep(5))
-    bot_message = await bot.send_message(message.chat.id, result)
-    await task
-    await bot.delete_message(chat_id=message.chat.id, message_id=bot_message.message_id)
+    
+    if data['check_secret'] == await loop.run_in_executor(thread_executor, database.check_secret_word, message.from_user.username):
+        result = await loop.run_in_executor(thread_executor, database.select_from_db, message.from_user.username)
+        await state.finish()
+        task = asyncio.create_task(asyncio.sleep(60))
+        bot_message = await bot.send_message(message.chat.id, result)
+        await task
+        await bot.delete_message(chat_id=message.chat.id, message_id=bot_message.message_id)
+    else:
+        await bot.send_message(message.chat.id, 'Type your secret word again.')
+        await bot.send_message(message.chat.id, f'{database.check_secret_word(message.from_user.username)}')
+        await state.finish()
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
