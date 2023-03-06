@@ -43,12 +43,14 @@ async def create_table_secret_word(table_name):
     conn.commit()
 
 async def close_db_connection():
-    global cur, conn
-
+    global conn, cur
     if cur is not None:
         cur.close()
+        cur = None
+
     if conn is not None:
         conn.close()
+        conn = None
 
 async def add_to_main_db(state, table_name, account, password):
     async with state.proxy() as data:
