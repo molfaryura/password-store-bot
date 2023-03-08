@@ -15,6 +15,8 @@ import os
 
 from dotenv import load_dotenv
 
+from encrypt import encrypt, key, decrypt
+
 load_dotenv()
 
 storage = MemoryStorage()
@@ -67,8 +69,10 @@ async def account(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Form.password)
 async def pwd(message:types.Message, state: FSMContext):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(thread_executor, encrypt, key, message.text.encode())
     async with state.proxy() as data:
-        data['password'] = message.text
+        data['password'] = result
     await Form.next()
     task = asyncio.create_task(asyncio.sleep(350))
     await  message.answer("Type your secret word: ")

@@ -5,8 +5,6 @@ import hashlib
 from Crypto import Random
 from Crypto.Cipher import AES
 
-from key import hash
-
 import os
 
 from dotenv import load_dotenv
@@ -31,7 +29,3 @@ def decrypt(key, ciphertext):
     return cipher.decrypt(ciphertext[AES.block_size:]).rstrip(b"\0")
 
 key = hashlib.sha256(f"{secret_key}".encode()).digest()
-
-#encrypted_text = encrypt(key, b"Hello, World!")
-
-#decrypted_text = decrypt(key, encrypted_text).decode('utf8')
