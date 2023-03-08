@@ -5,6 +5,8 @@ import os
 
 from dotenv import load_dotenv
 
+from encrypt import decrypt, key
+
 load_dotenv()
 
 hostname = os.environ.get('hostname')
@@ -31,7 +33,7 @@ async def connect_to_db():
 async def create_main_table(table_name):
     cur.execute(sql.SQL('''CREATE TABLE IF NOT EXISTS {} 
                         (id serial PRIMARY KEY, account varchar(255), 
-                        password varchar(255))''').format(sql.Identifier(table_name)))
+                        password BYTEA)''').format(sql.Identifier(table_name)))
     conn.commit()
 
 
@@ -81,5 +83,5 @@ def check_secret_word(table_name):
 def select_from_db(table_name):
     cur.execute(sql.SQL('''SELECT account, password FROM {}''').format(sql.Identifier(table_name)))
     rows = cur.fetchall()
-    result = {row[0]:row[1] for row in rows}
+    result = {row[0]:decrypt(key,row[1]).decode('utf8') for row in rows}
     return '\n'.join(f'{acc}: {pwd}' for acc, pwd in result.items())

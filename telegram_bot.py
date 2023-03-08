@@ -7,7 +7,6 @@ from aiogram.utils import executor
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.dispatcher.filters import Text
 
 import database
 
@@ -15,7 +14,7 @@ import os
 
 from dotenv import load_dotenv
 
-from encrypt import encrypt, key, decrypt
+from encrypt import encrypt, key
 
 load_dotenv()
 
