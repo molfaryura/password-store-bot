@@ -37,6 +37,9 @@ class SecondForm(StatesGroup):
 
 class DeleteTableForm(StatesGroup):
     check_secret = State()
+    table_or_row = State()
+    table = State()
+    row = State()
 
 @dp.message_handler(commands=['start'])
 async def start(message:types.Message):
@@ -139,20 +142,37 @@ async def show_passwords(message:types.Message, state: FSMContext):
         else:
             await bot.send_message(message.chat.id, 'Type your secret word again.')
             await state.finish()
+            
+
 
 @dp.message_handler(state=DeleteTableForm.check_secret)
-async def delete_table(message:types.Message, state: FSMContext):
+async def ask_what_to_delete(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
-            data['check_secret'] = message.text
-    try:
-        await database.check_connection()
-        await database.delete_table_from_db(state, data['check_secret'], message.from_user.username)
+        data['check_secret'] = message.text
+    await database.check_connection()
+    loop = asyncio.get_event_loop()
+    if data['check_secret'] == await loop.run_in_executor(thread_executor, database.check_secret_word, message.from_user.username):
+        await bot.send_message(message.chat.id, "Type 'all' to delete all password or type a specific account which you want to delete.")
+        await DeleteTableForm.next()
+
+    else:
+        await bot.send_message(message.chat.id, "Your secret word is incorrect!")
+        await state.finish()
+    
+@dp.message_handler(state=DeleteTableForm.table_or_row)
+async def choose_table_or_row(message:types.Message, state: FSMContext):
+    await database.check_connection()
+    if message.text == 'all':
+        try:
+            await database.delete_table_from_db(state, message.from_user.username)
+            await bot.send_message(message.chat.id, 'All your passwords are successfully deleted.')
+        except:
+            await bot.send_message(message.chat.id, 'You do not have any passwords stored in the database!')
+    else:
+        await database.delete_row_from_db(state, message.text, message.from_user.username)
         await bot.send_message(message.chat.id, 'All your passwords are successfully deleted.')
-
-    except:
-        await bot.send_message(message.chat.id, 'You do not have any passwords stored in the database!')
-
     await state.finish()
+
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
