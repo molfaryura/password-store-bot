@@ -1,5 +1,8 @@
 import psycopg2
 from psycopg2 import sql
+import asyncio
+
+from concurrent.futures import ThreadPoolExecutor
 
 import os
 
@@ -17,6 +20,8 @@ port_id = os.environ.get('port_id')
 
 conn = None
 cur = None
+
+thread_executor = ThreadPoolExecutor()
 
 async def connect_to_db():
     global cur, conn
@@ -70,12 +75,22 @@ async def add_to_secret_word_db(state, table_name, secret_word, hint):
                     tuple([secret_word, hint]))
         conn.commit()
 
+async def delete_table_from_db(state, secret_word, table_name):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(thread_executor, check_secret_word, table_name)
+    async with state.proxy() as data:
+        if secret_word == result:
+            cur.execute(sql.SQL('''DROP table IF EXISTS {}''').format(sql.Identifier(table_name)))
+            cur.execute(sql.SQL('''DROP table IF EXISTS {}''').format(sql.Identifier(table_name+'_secret_word')))
+            conn.commit()
+
+
 async def check_connection():
     if conn is None or cur is None:
        await connect_to_db()
 
 def check_secret_word(table_name):
-        cur.execute(sql.SQL('''SELECT secret_word FROM {}''').format(sql.Identifier(table_name+'_secret_word')))
+        cur.execute(sql.SQL('''SELECT secret_word FROM {}''').format(sql.Identifier(table_name+'_secret_word')))     
         rows = cur.fetchall()
         return rows[0][0]
 
