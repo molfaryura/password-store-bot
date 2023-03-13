@@ -26,13 +26,16 @@ dp = Dispatcher(bot, storage=storage)
 
 thread_executor = ThreadPoolExecutor()
 
-class Form(StatesGroup):
+class AddSecretWordForm(StatesGroup):
+    secret_word = State()
+    hint  = State()
+
+class AddAccPwdForm(StatesGroup):
     account = State()
     password = State()
-    secret_word = State()
-    hint = State()
 
-class SecondForm(StatesGroup):
+
+class SelectForm(StatesGroup):
     check_secret = State()
 
 class DeleteTableForm(StatesGroup):
@@ -71,68 +74,88 @@ async def cancel(message: types.Message, state: FSMContext):
     await message.answer("Canceled!")
 
 
-@dp.message_handler(commands=['add'], state=None)
-async def add(message:types.Message):
-    await Form.account.set()
-    await bot.send_message(message.chat.id, 'Hi, what is this account?')
-
-@dp.message_handler(state=Form.account)
-async def account(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        data['account'] = message.text
-    await Form.next()
-    await message.answer("Type your password: ")
-
-
-@dp.message_handler(state=Form.password)
-async def pwd(message:types.Message, state: FSMContext):
+@dp.message_handler(commands=['secret'], state=None)
+async def start_secret_word(message:types.Message):
+    await database.check_connection()
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(thread_executor, encrypt, key, message.text.encode())
-    async with state.proxy() as data:
-        data['password'] = result
-    await Form.next()
-    task = asyncio.create_task(asyncio.sleep(350))
-    await  message.answer("Type your secret word: ")
-    await task
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+    if await loop.run_in_executor(thread_executor, database.check_if_secret_table_exists, message.from_user.username):
+        await bot.send_message(message.chat.id, "You already have a secret word.", parse_mode='html')
+    else:
+        await AddSecretWordForm.secret_word.set()
+        await bot.send_message(message.chat.id, "Type your secret word: ")
 
-
-@dp.message_handler(state=Form.secret_word)
-async def secret_word(message:types.Message, state: FSMContext):
+@dp.message_handler(state=AddSecretWordForm.secret_word)
+async def add_secret_word(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['secret_word'] = message.text
-    await Form.next()
+    await AddSecretWordForm.next()
     await  message.answer("""Enter a hint for your secret word.Keep in mind that if you forget your secret word, you won't be able to see your passwords! """)
 
-@dp.message_handler(state=Form.hint)
-async def hint(message:types.Message, state: FSMContext):
+@dp.message_handler(state=AddSecretWordForm.hint)
+async def hint_(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['hint'] = message.text
     try:
         await database.connect_to_db()
         await database.create_table_secret_word(table_name=message.from_user.username)
-        await database.create_main_table(table_name=message.from_user.username)
+
         await database.add_to_secret_word_db(state, message.from_user.username, data['secret_word'], data['hint'])
+    except Exception as error:
+        await message.answer(f"{error}")
+    finally:
+        await database.close_db_connection()
+    await  message.answer(f"Your secret word and a hint are successfully created.")
+    await state.finish() 
+
+@dp.message_handler(commands=['add'], state=None)
+async def add(message:types.Message):
+    await AddAccPwdForm.account.set()
+    await bot.send_message(message.chat.id, 'Hi, what is this account?')
+
+@dp.message_handler(state=AddAccPwdForm.account)
+async def account(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['account'] = message.text
+    await AddAccPwdForm.next()
+    await message.answer("Type your password: ")
+
+
+@dp.message_handler(state=AddAccPwdForm.password)
+async def pwd(message:types.Message, state: FSMContext):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(thread_executor, encrypt, key, message.text.encode())
+    async with state.proxy() as data:
+        data['password'] = result
+
+    task = asyncio.create_task(asyncio.sleep(10))
+
+    try:
+        await database.connect_to_db()
+        await database.create_main_table(table_name=message.from_user.username)
         await database.add_to_main_db(state, message.from_user.username, data['account'], data['password'])
 
     except Exception as error:
         await message.answer(f"{error}")
     finally:
         await database.close_db_connection()
+
     await  message.answer(f"Your password is successfully stored in the database")
-    await state.finish()  
+    await state.finish()
+
+    await task
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
 
 
 @dp.message_handler(commands=['show', 'delete'], state=None)
 async def check_secret(message:types.Message, state: FSMContext):
         if message.text == '/show':
-            await SecondForm.check_secret.set()
+            await SelectForm.check_secret.set()
         else:
             await DeleteTableForm.check_secret.set()
         await bot.send_message(message.chat.id, 'Type your secret word.')
 
 
-@dp.message_handler(state=SecondForm.check_secret)
+@dp.message_handler(state=SelectForm.check_secret)
 async def show_passwords(message:types.Message, state: FSMContext):
     if message.text == '/add':
         await state.finish()
@@ -154,7 +177,6 @@ async def show_passwords(message:types.Message, state: FSMContext):
             await bot.send_message(message.chat.id, 'Type your secret word again.')
             await state.finish()
             
-
 
 @dp.message_handler(state=DeleteTableForm.check_secret)
 async def ask_what_to_delete(message:types.Message, state: FSMContext):
