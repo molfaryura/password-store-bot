@@ -46,10 +46,21 @@ async def start(message:types.Message):
     info = (f'Hello <b>{message.from_user.first_name}</b>,\n'
         'Welcome to the Password Store Bot!\n'
         'Here you can securely store your passwords.\n\n'
-
-        '/add - adding a new password to the database.')
+        
+        '/help - type to receive instructions for use')
     
     await bot.send_message(message.chat.id, info, parse_mode='html')
+
+@dp.message_handler(commands=['help'])
+async def help_(message:types.Message):
+    help_info = ('To use this bot, at first you need to create a secret word '
+                 'for your passwords: type /secret\n\n'
+                 'Here are the commands you can use:\n'
+                 '/add - add a new password to the database.\n'
+                 '/cancel - cancel the current action.\n'
+                 '/delete - delete your passwords in the database.'
+                 )
+    await bot.send_message(message.chat.id, help_info, parse_mode='html')
 
 @dp.message_handler(commands=['cancel'], state="*")
 async def cancel(message: types.Message, state: FSMContext):
