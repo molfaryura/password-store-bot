@@ -87,12 +87,19 @@ async def check_connection():
        await connect_to_db()
 
 def check_secret_word(table_name):
-        cur.execute(sql.SQL('''SELECT secret_word FROM {}''').format(sql.Identifier(table_name+'_secret_word')))     
-        rows = cur.fetchall()
-        return rows[0][0]
+    cur.execute(sql.SQL('''SELECT secret_word FROM {}''').format(sql.Identifier(table_name+'_secret_word')))     
+    rows = cur.fetchall()
+    return rows[0][0]
 
 def check_if_secret_table_exists(table_name):
-    return cur.execute('''SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s);''', (table_name+'_secret_word',))
+    cur.execute('''SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name=%s)''', (table_name+"_secret_word",))
+    rows = cur.fetchall()
+    return rows[0][0]
+
+def select_hint(table_name):
+    cur.execute(sql.SQL('''SELECT hint FROM {}''').format(sql.Identifier(table_name+'_secret_word')))
+    rows = cur.fetchall()
+    return rows[0][0]  
 
 
 def select_from_db(table_name):

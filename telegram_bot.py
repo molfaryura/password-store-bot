@@ -34,7 +34,6 @@ class AddAccPwdForm(StatesGroup):
     account = State()
     password = State()
 
-
 class SelectForm(StatesGroup):
     check_secret = State()
 
@@ -79,7 +78,7 @@ async def start_secret_word(message:types.Message):
     await database.check_connection()
     loop = asyncio.get_event_loop()
     if await loop.run_in_executor(thread_executor, database.check_if_secret_table_exists, message.from_user.username):
-        await bot.send_message(message.chat.id, "You already have a secret word.", parse_mode='html')
+        await bot.send_message(message.chat.id, "You already have a secret word!")
     else:
         await AddSecretWordForm.secret_word.set()
         await bot.send_message(message.chat.id, "Type your secret word: ")
@@ -106,8 +105,19 @@ async def hint_(message:types.Message, state: FSMContext):
         await message.answer(f"{error}")
     finally:
         await database.close_db_connection()
-    await  message.answer(f"Your secret word and a hint are successfully created.")
-    await state.finish() 
+    await message.answer("Your secret word and a hint are successfully created.")
+    await state.finish()
+
+@dp.message_handler(commands=['show_hint'])
+async def show_hint(message:types.Message):
+    await database.check_connection()
+    loop = asyncio.get_event_loop()
+    if await loop.run_in_executor(thread_executor, database.check_if_secret_table_exists, message.from_user.username):
+        result = await loop.run_in_executor(thread_executor, database.select_hint, message.from_user.username)
+        await message.answer(f"The hint for your secret words is: {result}.")
+    else:
+        await message.answer("You do not have a secret word. Type /secret to create one", parse_mode='html')
+
 
 @dp.message_handler(commands=['add'], state=None)
 async def add(message:types.Message):
