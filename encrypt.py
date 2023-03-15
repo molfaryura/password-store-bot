@@ -13,6 +13,10 @@ secret_key = os.environ.get('SECRET_KEY')
 
 load_dotenv()
 
+def hash_secret_word(message):
+    result = hashlib.sha256(message.encode()).hexdigest()
+    return result
+
 def encrypt(key, plaintext):
 
     plaintext = plaintext + b"\0" * (AES.block_size - len(plaintext) % AES.block_size)

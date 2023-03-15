@@ -15,7 +15,7 @@ import os
 
 from dotenv import load_dotenv
 
-from encrypt import encrypt, key
+from encrypt import encrypt, key, hash_secret_word
 
 load_dotenv()
 
@@ -86,8 +86,10 @@ async def start_secret_word(message:types.Message):
 
 @dp.message_handler(state=AddSecretWordForm.secret_word)
 async def add_secret_word(message: types.Message, state: FSMContext):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(thread_executor, hash_secret_word, message.text)
     async with state.proxy() as data:
-        data['secret_word'] = message.text
+        data['secret_word'] = result
     await AddSecretWordForm.next()
     await  message.answer("""Enter a hint for your secret word.Keep in mind that if you forget your secret word, you won't be able to see your passwords! """)
 
@@ -161,21 +163,23 @@ async def show_passwords(message:types.Message, state: FSMContext):
         await state.finish()
         await add(message)
     else:
-        async with state.proxy() as data:
-            data['check_secret'] = message.text
-        await database.check_connection()
         loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(thread_executor, hash_secret_word, message.text)
+        async with state.proxy() as data:
+            data['check_secret'] = result
+        await database.check_connection()
         
         if data['check_secret'] == await loop.run_in_executor(thread_executor, database.check_secret_word, message.from_user.username):
             result = await loop.run_in_executor(thread_executor, database.select_from_db, message.from_user.username)
             await state.finish()
-            task = asyncio.create_task(asyncio.sleep(60))
+            task = asyncio.create_task(asyncio.sleep(15))
             bot_message = await bot.send_message(message.chat.id, result)
             await task
             await bot.delete_message(chat_id=message.chat.id, message_id=bot_message.message_id)
+            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
         else:
             await bot.send_message(message.chat.id, 'Type your secret word again.')
-            await state.finish()
+        await state.finish()
             
 
 @dp.message_handler(state=DeleteTableForm.check_secret)
@@ -183,6 +187,7 @@ async def ask_what_to_delete(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['check_secret'] = message.text
     await database.check_connection()
+
     loop = asyncio.get_event_loop()
     if data['check_secret'] == await loop.run_in_executor(thread_executor, database.check_secret_word, message.from_user.username):
         await bot.send_message(message.chat.id, "Type 'all' to delete all password or type a specific account which you want to delete.")
