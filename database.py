@@ -107,3 +107,8 @@ def select_from_db(table_name):
     rows = cur.fetchall()
     result = {row[0]:decrypt(key,row[1]).decode('utf8') for row in rows}
     return '\n'.join(f'{acc}: {pwd}' for acc, pwd in result.items())
+
+async def change_secret_word(state, table_name):
+    async with state.proxy() as data:
+        cur.execute(sql.SQL('''UPDATE {} SET secret_word=%s, hint=%s''').format(sql.Identifier(table_name+"_secret_word")), tuple(data.values()))
+        conn.commit()
