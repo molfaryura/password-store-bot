@@ -110,5 +110,5 @@ def select_from_db(table_name):
 
 async def change_secret_word(state, table_name):
     async with state.proxy() as data:
-        cur.execute(sql.SQL('''UPDATE {} SET secret_word=%s, hint=%s''').format(sql.Identifier(table_name+"_secret_word")), tuple(data.values()))
+        cur.execute(sql.SQL('''UPDATE {} SET secret_word=%s, hint=%s''').format(sql.Identifier(table_name+"_secret_word")), tuple(data.values())[1:3])
         conn.commit()
