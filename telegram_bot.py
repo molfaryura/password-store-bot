@@ -126,8 +126,14 @@ async def show_hint(message:types.Message):
 
 @dp.message_handler(commands=['add'], state=None)
 async def add(message:types.Message):
-    await AddAccPwdForm.account.set()
-    await bot.send_message(message.chat.id, 'Hi, what is this account?')
+    await database.check_connection()
+    loop = asyncio.get_event_loop()
+
+    if await loop.run_in_executor(thread_executor, database.check_if_secret_table_exists, message.from_user.username):
+        await AddAccPwdForm.account.set()
+        await bot.send_message(message.chat.id, 'Hi, what is this account?')
+    else:
+        await message.answer("You do not have a secret word. Type /secret to create one", parse_mode='html')
 
 @dp.message_handler(state=AddAccPwdForm.account)
 async def account(message: types.Message, state: FSMContext):
