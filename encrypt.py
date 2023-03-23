@@ -1,11 +1,13 @@
+"""Encryption and decryption text data based on AES"""
+
 import base64
 
 import hashlib
 
+import os
+
 from Crypto import Random
 from Crypto.Cipher import AES
-
-import os
 
 from dotenv import load_dotenv
 
@@ -14,22 +16,49 @@ secret_key = os.environ.get('SECRET_KEY')
 load_dotenv()
 
 def hash_secret_word(message):
+    """Hashes string using sha256
+
+    Args:
+        message(str)
+
+    Returns:
+        str: hash of the given string.
+    """
+
     result = hashlib.sha256(message.encode()).hexdigest()
     return result
 
 def encrypt(key, plaintext):
+    """A function that encrypts the given plaintext using AES CBC encryption with the given key
+
+    Args:
+        key: a bytes object representing the encryption key.
+        plaintext: a bytes object representing the text to be encrypted.
+
+    Returns:
+        The encrypted text as a bytes object, encoded in base64.
+    """
 
     plaintext = plaintext + b"\0" * (AES.block_size - len(plaintext) % AES.block_size)
-    iv = Random.new().read(AES.block_size)
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    return base64.b64encode(iv + cipher.encrypt(plaintext))
+    initialization_vector = Random.new().read(AES.block_size)
+    cipher = AES.new(key, AES.MODE_CBC, initialization_vector)
+    return base64.b64encode(initialization_vector + cipher.encrypt(plaintext))
 
 
 def decrypt(key, ciphertext):
+    """Decrypts the given ciphertext using AES CBC decryption with the given key
+
+    Args:
+        key: a bytes object representing the decryption key.
+        ciphertext: a bytes object representing the encrypted text to be decrypted.
+
+    Returns:
+        The decrypted text as a bytes object, with any trailing null bytes (b"\0") removed.
+    """
 
     ciphertext = base64.b64decode(ciphertext)
-    iv = ciphertext[:AES.block_size]
-    cipher = AES.new(key, AES.MODE_CBC, iv)
+    initialization_vector = ciphertext[:AES.block_size]
+    cipher = AES.new(key, AES.MODE_CBC, initialization_vector)
     return cipher.decrypt(ciphertext[AES.block_size:]).rstrip(b"\0")
 
-key = hashlib.sha256(f"{secret_key}".encode()).digest()
+KEY = hashlib.sha256(f"{secret_key}".encode()).digest()
