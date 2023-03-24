@@ -15,7 +15,7 @@ import os
 
 from dotenv import load_dotenv
 
-from encrypt import encrypt, key, hash_secret_word
+from encrypt import encrypt, KEY, hash_secret_word
 
 load_dotenv()
 
@@ -105,7 +105,7 @@ async def hint_(message:types.Message, state: FSMContext):
         await database.connect_to_db()
         await database.create_table_secret_word(table_name=message.from_user.username)
 
-        await database.add_to_secret_word_db(state, message.from_user.username, data['secret_word'], data['hint'])
+        await database.add_to_secret_word_db(message.from_user.username, data['secret_word'], data['hint'])
     except Exception as error:
         await message.answer(f"{error}")
     finally:
@@ -146,7 +146,7 @@ async def account(message: types.Message, state: FSMContext):
 @dp.message_handler(state=AddAccPwdForm.password)
 async def pwd(message:types.Message, state: FSMContext):
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(thread_executor, encrypt, key, message.text.encode())
+    result = await loop.run_in_executor(thread_executor, encrypt, KEY, message.text.encode())
     async with state.proxy() as data:
         data['password'] = result
 
@@ -155,7 +155,7 @@ async def pwd(message:types.Message, state: FSMContext):
     try:
         await database.connect_to_db()
         await database.create_main_table(table_name=message.from_user.username)
-        await database.add_to_main_db(state, message.from_user.username, data['account'], data['password'])
+        await database.add_to_main_db(message.from_user.username, data['account'], data['password'])
 
     except Exception as error:
         await message.answer(f"{error}")
@@ -170,15 +170,23 @@ async def pwd(message:types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands=['show', 'delete', 'change_secret_word'], state=None)
-async def check_secret(message:types.Message, state: FSMContext):
-        if message.text == '/show':
-            await SelectForm.check_secret.set()
-        elif message.text == '/delete':
-            await DeleteTableForm.check_secret.set()
-        else:
-            await ChangeSecretWordForm.check_secret.set()
+async def check_secret(message:types.Message):
 
-        await bot.send_message(message.chat.id, 'Type your secret word.')
+        await database.check_connection()
+
+        loop = asyncio.get_event_loop()
+
+        if await loop.run_in_executor(thread_executor, database.check_if_secret_table_exists, message.from_user.username):
+            if message.text == '/show':
+                await SelectForm.check_secret.set()
+            elif message.text == '/delete':
+                await DeleteTableForm.check_secret.set()
+            else:
+                await ChangeSecretWordForm.check_secret.set()
+
+            await bot.send_message(message.chat.id, 'Type your secret word.')
+        else:
+            await message.answer("At first you need to create a secret word, and store account and passwords.")
 
 
 @dp.message_handler(state=SelectForm.check_secret)
@@ -228,12 +236,12 @@ async def choose_table_or_row(message:types.Message, state: FSMContext):
     await database.check_connection()
     if message.text == 'all':
         try:
-            await database.delete_table_from_db(state, message.from_user.username)
+            await database.delete_table_from_db(message.from_user.username)
             await bot.send_message(message.chat.id, 'All your passwords are successfully deleted.')
         except:
             await bot.send_message(message.chat.id, 'You do not have any passwords stored in the database!')
     else:
-        await database.delete_row_from_db(state, message.text, message.from_user.username)
+        await database.delete_row_from_db(message.text, message.from_user.username)
         await bot.send_message(message.chat.id, 'All your passwords are successfully deleted.')
     await state.finish()
 
