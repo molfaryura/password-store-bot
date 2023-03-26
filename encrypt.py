@@ -18,11 +18,9 @@ load_dotenv()
 def hash_secret_word(message):
     """Hashes string using sha256
 
-    Args:
-        message(str)
+    param message: string
 
-    Returns:
-        str: hash of the given string.
+    returns(str): hash of the given string.
     """
 
     result = hashlib.sha256(message.encode()).hexdigest()
@@ -31,12 +29,10 @@ def hash_secret_word(message):
 def encrypt(key, plaintext):
     """A function that encrypts the given plaintext using AES CBC encryption with the given key
 
-    Args:
-        key: a bytes object representing the encryption key.
-        plaintext: a bytes object representing the text to be encrypted.
+    param key: a bytes object representing the encryption key.
+    param plaintext: a bytes object representing the text to be encrypted.
 
-    Returns:
-        The encrypted text as a bytes object, encoded in base64.
+    returns: The encrypted text as a bytes object, encoded in base64.
     """
 
     plaintext = plaintext + b"\0" * (AES.block_size - len(plaintext) % AES.block_size)
@@ -48,12 +44,10 @@ def encrypt(key, plaintext):
 def decrypt(key, ciphertext):
     """Decrypts the given ciphertext using AES CBC decryption with the given key
 
-    Args:
-        key: a bytes object representing the decryption key.
-        ciphertext: a bytes object representing the encrypted text to be decrypted.
+    param key: a bytes object representing the decryption key.
+    param ciphertext: a bytes object representing the encrypted text to be decrypted.
 
-    Returns:
-        The decrypted text as a bytes object, with any trailing null bytes (b"\0") removed.
+    returns: The decrypted text as a bytes object, with any trailing null bytes (b"\0") removed.
     """
 
     ciphertext = base64.b64decode(ciphertext)
