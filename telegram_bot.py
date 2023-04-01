@@ -121,8 +121,11 @@ async def add_secret_word(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['secret_word'] = result
     await AddSecretWordForm.next()
-    await  message.answer("""Enter a hint for your secret word.
-    Keep in mind that if you forget your secret word, you won't be able to see your passwords!""")
+
+    await  message.answer(("Enter a <b>hint</b> for your secret word. "
+    "Keep in mind that if you forget your secret word, you <b>won't be able</b> "
+    "to see your passwords!"),
+    parse_mode='html')
 
 @dp.message_handler(state=AddSecretWordForm.hint)
 async def hint_(message:types.Message, state: FSMContext):
