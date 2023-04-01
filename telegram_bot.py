@@ -105,8 +105,9 @@ async def start_secret_word(message:types.Message):
     loop = asyncio.get_event_loop()
     username = message.from_user.username
 
-    if await loop.run_in_execut(_execut, db.check_if_secret_table_exists, username):
+    if await loop.run_in_executor(_execut, db.check_if_secret_table_exists, username):
         await bot.send_message(message.chat.id, "You already have a secret word!")
+        await db.close_db_connection()
     else:
         await AddSecretWordForm.secret_word.set()
         await bot.send_message(message.chat.id, "Type your secret word: ")
@@ -116,7 +117,7 @@ async def add_secret_word(message: types.Message, state: FSMContext):
     """Asks the user to type a hint"""
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_execut(_execut, hash_secret_word, message.text)
+    result = await loop.run_in_executor(_execut, hash_secret_word, message.text)
     async with state.proxy() as data:
         data['secret_word'] = result
     await AddSecretWordForm.next()
@@ -153,12 +154,13 @@ async def show_hint(message:types.Message):
     await db.check_connection()
     loop = asyncio.get_event_loop()
 
-    if await loop.run_in_execut(_execut, db.check_if_secret_table_exists, username):
-        result = await loop.run_in_execut(_execut, db.select_hint, username)
+    if await loop.run_in_executor(_execut, db.check_if_secret_table_exists, username):
+        result = await loop.run_in_executor(_execut, db.select_hint, username)
         await message.answer(f"The hint for your secret words is: {result}.")
     else:
         await message.answer("You do not have a secret word. Type /secret to create one",
                              parse_mode='html')
+        await db.close_db_connection()
 
 
 @dp.message_handler(commands=['add'], state=None)
@@ -170,12 +172,13 @@ async def add(message:types.Message):
     await db.check_connection()
     loop = asyncio.get_event_loop()
 
-    if await loop.run_in_execut(_execut, db.check_if_secret_table_exists, username):
+    if await loop.run_in_executor(_execut, db.check_if_secret_table_exists, username):
         await AddAccPwdForm.account.set()
         await bot.send_message(message.chat.id, 'Hi, what is this account?')
     else:
         await message.answer("You do not have a secret word. Type /secret to create one",
                              parse_mode='html')
+        await db.close_db_connection()
 
 @dp.message_handler(state=AddAccPwdForm.account)
 async def account(message: types.Message, state: FSMContext):
@@ -192,7 +195,7 @@ async def pwd(message:types.Message, state: FSMContext):
     """Stores account name and a password in the database"""
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_execut(_execut, encrypt, KEY, message.text.encode())
+    result = await loop.run_in_executor(_execut, encrypt, KEY, message.text.encode())
     async with state.proxy() as data:
         data['password'] = result
 
@@ -226,7 +229,7 @@ async def check_secret(message:types.Message):
 
     loop = asyncio.get_event_loop()
 
-    if await loop.run_in_execut(_execut, db.check_if_secret_table_exists, username):
+    if await loop.run_in_executor(_execut, db.check_if_secret_table_exists, username):
         if message.text == '/show':
             await SelectForm.check_secret.set()
         elif message.text == '/delete':
@@ -237,6 +240,7 @@ async def check_secret(message:types.Message):
         await bot.send_message(message.chat.id, 'Type your secret word.')
     else:
         await message.answer("You need to create a secret word, and store your passwords.")
+        await db.close_db_connection()
 
 
 @dp.message_handler(state=SelectForm.check_secret)
@@ -250,24 +254,31 @@ async def show_passwords(message:types.Message, state: FSMContext):
         await add(message)
     else:
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_execut(_execut, hash_secret_word, message.text)
+        result = await loop.run_in_executor(_execut, hash_secret_word, message.text)
         async with state.proxy() as data:
             data['check_secret'] = result
 
         await db.check_connection()
 
-        if data['check_secret'] == await loop.run_in_execut(_execut,
+        if data['check_secret'] == await loop.run_in_executor(_execut,
                                                               db.check_secret_word,
                                                               username):
-            result = await loop.run_in_execut(_execut, db.select_from_db, username)
-            await state.finish()
-            task = asyncio.create_task(asyncio.sleep(15))
-            bot_message = await bot.send_message(message.chat.id, result)
-            await task
-            await bot.delete_message(chat_id=message.chat.id, message_id=bot_message.message_id)
-            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+            try:
+                result = await loop.run_in_executor(_execut, db.select_from_db, username)
+                await state.finish()
+                task = asyncio.create_task(asyncio.sleep(15))
+                bot_message = await bot.send_message(message.chat.id, result)
+                await task
+                await bot.delete_message(chat_id=message.chat.id, message_id=bot_message.message_id)
+                await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+            except:
+                await state.finish()
+                await bot.send_message(message.chat.id, "Store at least one password at first.")
+
         else:
             await bot.send_message(message.chat.id, 'Type your secret word again.')
+
+        await db.close_db_connection()
 
         await state.finish()
 
@@ -278,12 +289,12 @@ async def ask_what_to_delete(message:types.Message, state: FSMContext):
 
     username = message.from_user.username
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_execut(_execut, hash_secret_word, message.text)
+    result = await loop.run_in_executor(_execut, hash_secret_word, message.text)
 
     async with state.proxy() as data:
         data['check_secret'] = result
 
-    if data['check_secret'] == await loop.run_in_execut(_execut, db.check_secret_word, username):
+    if data['check_secret'] == await loop.run_in_executor(_execut, db.check_secret_word, username):
         info_message = """Type 'all' to delete all password
         or type a specific account which you want to delete."""
 
@@ -310,6 +321,8 @@ async def choose_table_or_row(message:types.Message, state: FSMContext):
         await db.delete_row_from_db(message.text, message.from_user.username)
         await bot.send_message(message.chat.id, 'All your passwords are successfully deleted.')
 
+    await db.close_db_connection()
+
     await state.finish()
 
 
@@ -322,12 +335,12 @@ async def ask_for_new_secret_word(message:types.Message, state: FSMContext):
     await db.check_connection()
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_execut(_execut, hash_secret_word, message.text)
+    result = await loop.run_in_executor(_execut, hash_secret_word, message.text)
 
     async with state.proxy() as data:
         data['check_secret'] = result
 
-    if data['check_secret'] == await loop.run_in_execut(_execut, db.check_secret_word, username):
+    if data['check_secret'] == await loop.run_in_executor(_execut, db.check_secret_word, username):
         await bot.send_message(message.chat.id, "Type a new secret word.")
         await ChangeSecretWordForm.next()
     else:
@@ -339,7 +352,7 @@ async def ask_for_new_hint(message:types.Message, state: FSMContext):
     """Asks the user for the new hint"""
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_execut(_execut, hash_secret_word, message.text)
+    result = await loop.run_in_executor(_execut, hash_secret_word, message.text)
 
     async with state.proxy() as data:
         data['new_secret_word'] = result
