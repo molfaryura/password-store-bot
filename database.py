@@ -161,7 +161,7 @@ def check_secret_word(table_name):
 def check_if_secret_table_exists(table_name):
     """Selects secret_word table from the database
 
-    param table_name: usernamee
+    param table_name: username
 
     returns(bool): True if table exists
     """

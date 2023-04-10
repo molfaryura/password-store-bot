@@ -80,6 +80,7 @@ async def help_(message:types.Message):
                  'for your passwords: type /secret\n\n'
                  'Here are the commands you can use:\n'
                  '/add - add a new password to the db.\n'
+                 '/show - show your passwords.\n'
                  '/cancel - cancel the current action.\n'
                  '/delete - delete your passwords in the db.'
                  )
@@ -118,14 +119,20 @@ async def add_secret_word(message: types.Message, state: FSMContext):
 
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(_execut, hash_secret_word, message.text)
+
     async with state.proxy() as data:
         data['secret_word'] = result
+
+    task = asyncio.create_task(asyncio.sleep(120))
     await AddSecretWordForm.next()
 
     await  message.answer(("Enter a <b>hint</b> for your secret word. "
     "Keep in mind that if you forget your secret word, you <b>won't be able</b> "
     "to see your passwords!"),
     parse_mode='html')
+
+    await task
+    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
 
 @dp.message_handler(state=AddSecretWordForm.hint)
 async def hint_(message:types.Message, state: FSMContext):
@@ -252,38 +259,34 @@ async def show_passwords(message:types.Message, state: FSMContext):
 
     username = message.from_user.username
 
-    if message.text == '/add':
-        await state.finish()
-        await add(message)
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_execut, hash_secret_word, message.text)
+    async with state.proxy() as data:
+        data['check_secret'] = result
+
+    await db.check_connection()
+
+    if data['check_secret'] == await loop.run_in_executor(_execut,
+                                                            db.check_secret_word,
+                                                            username):
+        try:
+            result = await loop.run_in_executor(_execut, db.select_from_db, username)
+            await state.finish()
+            task = asyncio.create_task(asyncio.sleep(15))
+            bot_message = await bot.send_message(message.chat.id, result)
+            await task
+            await bot.delete_message(chat_id=message.chat.id, message_id=bot_message.message_id)
+            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+        except:
+            await state.finish()
+            await bot.send_message(message.chat.id, "Store at least one password at first.")
+
     else:
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(_execut, hash_secret_word, message.text)
-        async with state.proxy() as data:
-            data['check_secret'] = result
+        await bot.send_message(message.chat.id, 'Type your secret word again.')
 
-        await db.check_connection()
+    await db.close_db_connection()
 
-        if data['check_secret'] == await loop.run_in_executor(_execut,
-                                                              db.check_secret_word,
-                                                              username):
-            try:
-                result = await loop.run_in_executor(_execut, db.select_from_db, username)
-                await state.finish()
-                task = asyncio.create_task(asyncio.sleep(15))
-                bot_message = await bot.send_message(message.chat.id, result)
-                await task
-                await bot.delete_message(chat_id=message.chat.id, message_id=bot_message.message_id)
-                await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-            except:
-                await state.finish()
-                await bot.send_message(message.chat.id, "Store at least one password at first.")
-
-        else:
-            await bot.send_message(message.chat.id, 'Type your secret word again.')
-
-        await db.close_db_connection()
-
-        await state.finish()
+    await state.finish()
 
 
 @dp.message_handler(state=DeleteTableForm.check_secret)
